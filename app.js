@@ -551,6 +551,7 @@ function scheduleSync(reason = "scheduled", delay = 700) {
 
 function abilityStats() {
   const rows = ALL_ITEMS.map((item) => progressFor(item.id));
+  const totalItems = rows.length || 1;
   const attempted = rows.filter((row) => row.attempts > 0);
   const avgStrength = attempted.length
     ? attempted.reduce((sum, row) => sum + row.strength, 0) / attempted.length
@@ -558,10 +559,10 @@ function abilityStats() {
   const totalAttempts = attempted.reduce((sum, row) => sum + row.attempts, 0);
   const totalCorrect = attempted.reduce((sum, row) => sum + row.correct, 0);
   const accuracy = totalAttempts ? totalCorrect / totalAttempts : 0;
-  const courseStrength = rows.reduce((sum, row) => sum + row.strength, 0) / rows.length;
-  const coverage = attempted.length / rows.length;
-  const repDepth = rows.reduce((sum, row) => sum + Math.min(Number(row.attempts) || 0, 4) / 4, 0) / rows.length;
-  const progress = clamp(
+  const courseStrength = rows.reduce((sum, row) => sum + row.strength, 0) / totalItems;
+  const coverage = attempted.length / totalItems;
+  const repDepth = rows.reduce((sum, row) => sum + Math.min(Number(row.attempts) || 0, 4) / 4, 0) / totalItems;
+  const baseProgress = clamp(
     coverage * 0.35
       + accuracy * coverage * 0.3
       + repDepth * 0.2
@@ -569,9 +570,34 @@ function abilityStats() {
     0,
     1
   );
+  const practiceMomentum = clamp(totalAttempts / (totalItems * 8), 0, 1);
+  const progress = clamp(baseProgress + (1 - baseProgress) * practiceMomentum * 0.12, 0, 1);
   const level = avgStrength > 0.68 && accuracy > 0.78 ? "A2+" : avgStrength > 0.42 ? "A2" : avgStrength > 0.18 ? "A1+" : "A1";
   const levelGate = level === "A2+" ? 4 : level === "A2" ? 3 : level === "A1+" ? 2 : 1;
-  return { attempted, avgStrength, accuracy, courseStrength, coverage, progress, mastery: progress, level, levelGate };
+  return {
+    attempted,
+    avgStrength,
+    accuracy,
+    courseStrength,
+    coverage,
+    progress,
+    mastery: progress,
+    totalAttempts,
+    totalCorrect,
+    totalItems,
+    practiceMomentum,
+    level,
+    levelGate
+  };
+}
+
+function formatPercent(value, decimals = 0) {
+  return `${(clamp(Number(value) || 0, 0, 1) * 100).toFixed(decimals)}%`;
+}
+
+function formatProgressPercent(value) {
+  const bounded = clamp(Number(value) || 0, 0, 1);
+  return formatPercent(bounded, bounded > 0 && bounded < 0.995 ? 1 : 0);
 }
 
 function sessionTarget() {
@@ -869,7 +895,7 @@ function hydrateControls() {
 function renderStats() {
   const stats = abilityStats();
   el.todayCount.textContent = state.daily[todayKey()] || 0;
-  el.masteryScore.textContent = `${Math.round(stats.progress * 100)}%`;
+  el.masteryScore.textContent = formatProgressPercent(stats.progress);
   el.abilityLane.textContent = stats.level;
   if (el.mistakeCount) el.mistakeCount.textContent = mistakeRows().length;
 }
@@ -945,7 +971,8 @@ function renderWelcome() {
         <p class="eyebrow">Today</p>
         <h3>${target} reps · ${state.settings.focus} mix</h3>
         <p>${energyCopy()} Your current lane is ${stats.level}, so the next set will favor level ${stats.levelGate} material with a few carefully chosen stretches.</p>
-        <div class="meter" aria-label="Learning progress"><span style="--value: ${Math.round(stats.progress * 100)}%"></span></div>
+        <p class="study-footprint">${stats.attempted.length}/${stats.totalItems} items touched · ${stats.totalAttempts} reps · ${formatPercent(stats.accuracy)} correct</p>
+        <div class="meter" aria-label="Learning progress"><span style="--value: ${formatPercent(stats.progress, 1)}"></span></div>
         <div class="button-row">
           <button class="primary-button" type="button" data-action="start">Start session</button>
           <button class="secondary-button" type="button" data-action="mistakes" ${mistakes.length ? "" : "disabled"}>Mistakes</button>
@@ -1089,7 +1116,7 @@ function renderComplete() {
       <div class="complete-stats">
         <div><strong>${state.daily[todayKey()] || 0}</strong><small>reps today</small></div>
         <div><strong>${abilityStats().level}</strong><small>current lane</small></div>
-        <div><strong>${Math.round(abilityStats().progress * 100)}%</strong><small>progress</small></div>
+        <div><strong>${formatProgressPercent(abilityStats().progress)}</strong><small>progress</small></div>
       </div>
       <button class="primary-button" type="button" data-action="start">Start another</button>
     </div>
