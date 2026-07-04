@@ -1,6 +1,6 @@
 const STORAGE_KEY = "italian-coach-state-v1";
 const CLIENT_ID_KEY = "italian-coach-client-id-v1";
-const DEFAULT_SYNC_SERVER = "";
+const DEFAULT_SYNC_SERVER = document.querySelector('meta[name="italian-coach-sync-server"]')?.content || "";
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
 const COURSE = [
