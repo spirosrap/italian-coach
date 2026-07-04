@@ -17,3 +17,5 @@ coverage/
 
 data/*.json
 data/*.tmp
+server/php/data/*.json
+server/php/data/*.tmp

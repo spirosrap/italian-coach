@@ -1,0 +1,4 @@
+RewriteEngine On
+RewriteRule ^api/progress/?$ api/progress.php [L]
+
+DirectoryIndex index.html index.php

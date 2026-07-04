@@ -73,6 +73,25 @@ data/progress.json
 
 That file is intentionally ignored by Git because it contains personal learning progress.
 
+### PHP Hosting
+
+If your web host supports PHP but not long-running Node.js services, upload the reusable PHP backend in `server/php/` next to the web app files. It provides the same `GET` and `POST /api/progress` contract as the Node server.
+
+Recommended upload shape:
+
+```text
+your-site/
+├── index.html
+├── app.js
+├── styles.css
+├── assets/
+├── api/progress.php
+├── .htaccess
+└── data/.htaccess
+```
+
+The PHP backend writes personal progress to `data/progress.json`; `server/php/data/.htaccess` blocks direct browser access to that file on Apache/Plesk-style hosts.
+
 ## Sync Behavior
 
 Each app instance keeps its own local copy. When a sync server URL is configured, the app syncs when:
