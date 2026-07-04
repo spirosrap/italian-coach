@@ -121,6 +121,12 @@ The Android build expects:
 - Android SDK command-line tools or Android Studio
 - a USB-connected Android device with USB debugging enabled for `android:install`
 
+To prefill a sync server inside the generated Android bundle, set:
+
+```bash
+ITALIAN_COACH_SYNC_SERVER=https://your-domain.example/italian-coach npm run android:sync
+```
+
 The sample Android package id is `com.example.italiancoach`. Change `appId`, `namespace`, and `applicationId` before publishing your own build.
 
 ## Project Layout
