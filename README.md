@@ -131,6 +131,12 @@ To prefill a sync server inside the generated Android bundle, set:
 ITALIAN_COACH_SYNC_SERVER=https://your-domain.example/italian-coach npm run android:sync
 ```
 
+To build with your own Android package id without editing the project files, set:
+
+```bash
+ITALIAN_COACH_ANDROID_APP_ID=com.yourname.italiancoach npm run android:build
+```
+
 The sample Android package id is `com.example.italiancoach`. Change `appId`, `namespace`, and `applicationId` before publishing your own build.
 
 ## Project Layout

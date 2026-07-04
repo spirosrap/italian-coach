@@ -1,10 +1,12 @@
 apply plugin: 'com.android.application'
 
+def italianCoachAppId = System.getenv("ITALIAN_COACH_ANDROID_APP_ID") ?: "com.example.italiancoach"
+
 android {
     namespace = "com.example.italiancoach"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.example.italiancoach"
+        applicationId italianCoachAppId
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
