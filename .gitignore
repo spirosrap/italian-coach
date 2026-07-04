@@ -1,0 +1,19 @@
+node_modules/
+www/
+Italian Coach.app/
+*.app/
+
+.DS_Store
+*.log
+npm-debug.log*
+
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+
+dist/
+coverage/
+
+data/*.json
+data/*.tmp

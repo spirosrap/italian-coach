@@ -1,0 +1,10 @@
+{
+  "appId": "com.example.italiancoach",
+  "appName": "Italian Coach",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true
+  }
+}

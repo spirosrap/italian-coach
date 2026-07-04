@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f8f2" />
+    <title>Italian Coach</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./assets/app-icon-192.png" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="coach-panel" aria-label="Practice controls">
+        <div class="brand-row">
+          <img class="app-icon" src="./assets/app-icon-192.png" alt="" />
+          <div>
+            <p class="eyebrow">Italian Coach</p>
+            <h1>Allenati oggi</h1>
+          </div>
+        </div>
+
+        <img class="study-image" src="./assets/study-moment.png" alt="Notebook, espresso, and an Italian street view" />
+
+        <div class="settings-block">
+          <label for="energy">
+            <span>Energy</span>
+            <strong id="energyValue">65%</strong>
+          </label>
+          <input id="energy" type="range" min="20" max="100" step="5" value="65" />
+        </div>
+
+        <div class="settings-grid">
+          <label for="minutes">
+            <span>Minutes</span>
+            <input id="minutes" type="number" min="3" max="45" value="10" />
+          </label>
+          <label for="focus">
+            <span>Focus</span>
+            <select id="focus">
+              <option value="balanced">Balanced</option>
+              <option value="travel">Travel</option>
+              <option value="food">Food</option>
+              <option value="verbs">Verbs</option>
+              <option value="grammar">Grammar</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="compact-stats" aria-label="Progress summary">
+          <div>
+            <span id="todayCount">0</span>
+            <small>today</small>
+          </div>
+          <div>
+            <span id="masteryScore">0%</span>
+            <small>mastery</small>
+          </div>
+          <div>
+            <span id="abilityLane">A1</span>
+            <small>lane</small>
+          </div>
+        </div>
+      </aside>
+
+      <main class="practice-space">
+        <header class="top-bar">
+          <div>
+            <p id="sessionLabel" class="eyebrow">Ready</p>
+            <h2 id="screenTitle">Practice that follows your energy</h2>
+          </div>
+          <div class="top-actions">
+            <button id="resetSessionButton" class="icon-button" type="button" title="End current session" aria-label="End current session">×</button>
+            <button id="startButton" class="primary-button" type="button">Start</button>
+          </div>
+        </header>
+
+        <section id="practicePanel" class="practice-panel" aria-live="polite"></section>
+      </main>
+
+      <section class="insights-panel" aria-label="Learning insights">
+        <div>
+          <p class="eyebrow">Weak spots</p>
+          <div id="weakSkills" class="skill-list"></div>
+        </div>
+        <div>
+          <p class="eyebrow">Next mix</p>
+          <div id="nextMix" class="mix-list"></div>
+        </div>
+        <div>
+          <p class="eyebrow">Recent answers</p>
+          <div id="recentAnswers" class="recent-list"></div>
+        </div>
+        <div>
+          <p class="eyebrow">Sync</p>
+          <div class="sync-card">
+            <strong id="syncStatus">Not synced yet</strong>
+            <small id="syncDetail">Enter a sync server URL to sync across devices.</small>
+            <label for="syncServer">
+              <span>Server</span>
+              <input id="syncServer" type="url" inputmode="url" autocomplete="off" placeholder="http://your-server:4179" />
+            </label>
+            <div class="sync-actions">
+              <button id="syncNowButton" class="secondary-button" type="button">Sync</button>
+              <button id="syncPullButton" class="secondary-button" type="button">Pull</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script src="./app.js" defer></script>
+  </body>
+</html>

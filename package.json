@@ -1,0 +1,19 @@
+{
+  "name": "italian-coach",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "serve": "node scripts/server.mjs",
+    "web:copy": "node scripts/prepare-web.mjs",
+    "android:doctor": "java -version && adb devices -l",
+    "android:sync": "npm run web:copy && npx cap sync android",
+    "android:open": "npm run android:sync && npx cap open android",
+    "android:build": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "android:install": "npm run android:sync && cd android && ./gradlew installDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0"
+  }
+}
