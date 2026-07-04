@@ -558,10 +558,20 @@ function abilityStats() {
   const totalAttempts = attempted.reduce((sum, row) => sum + row.attempts, 0);
   const totalCorrect = attempted.reduce((sum, row) => sum + row.correct, 0);
   const accuracy = totalAttempts ? totalCorrect / totalAttempts : 0;
-  const mastery = rows.reduce((sum, row) => sum + row.strength, 0) / rows.length;
+  const courseStrength = rows.reduce((sum, row) => sum + row.strength, 0) / rows.length;
+  const coverage = attempted.length / rows.length;
+  const repDepth = rows.reduce((sum, row) => sum + Math.min(Number(row.attempts) || 0, 4) / 4, 0) / rows.length;
+  const progress = clamp(
+    coverage * 0.35
+      + accuracy * coverage * 0.3
+      + repDepth * 0.2
+      + courseStrength * 0.15,
+    0,
+    1
+  );
   const level = avgStrength > 0.68 && accuracy > 0.78 ? "A2+" : avgStrength > 0.42 ? "A2" : avgStrength > 0.18 ? "A1+" : "A1";
   const levelGate = level === "A2+" ? 4 : level === "A2" ? 3 : level === "A1+" ? 2 : 1;
-  return { attempted, avgStrength, accuracy, mastery, level, levelGate };
+  return { attempted, avgStrength, accuracy, courseStrength, coverage, progress, mastery: progress, level, levelGate };
 }
 
 function sessionTarget() {
@@ -859,7 +869,7 @@ function hydrateControls() {
 function renderStats() {
   const stats = abilityStats();
   el.todayCount.textContent = state.daily[todayKey()] || 0;
-  el.masteryScore.textContent = `${Math.round(stats.mastery * 100)}%`;
+  el.masteryScore.textContent = `${Math.round(stats.progress * 100)}%`;
   el.abilityLane.textContent = stats.level;
   if (el.mistakeCount) el.mistakeCount.textContent = mistakeRows().length;
 }
@@ -935,7 +945,7 @@ function renderWelcome() {
         <p class="eyebrow">Today</p>
         <h3>${target} reps · ${state.settings.focus} mix</h3>
         <p>${energyCopy()} Your current lane is ${stats.level}, so the next set will favor level ${stats.levelGate} material with a few carefully chosen stretches.</p>
-        <div class="meter" aria-label="Overall mastery"><span style="--value: ${Math.round(stats.mastery * 100)}%"></span></div>
+        <div class="meter" aria-label="Learning progress"><span style="--value: ${Math.round(stats.progress * 100)}%"></span></div>
         <div class="button-row">
           <button class="primary-button" type="button" data-action="start">Start session</button>
           <button class="secondary-button" type="button" data-action="mistakes" ${mistakes.length ? "" : "disabled"}>Mistakes</button>
@@ -1079,7 +1089,7 @@ function renderComplete() {
       <div class="complete-stats">
         <div><strong>${state.daily[todayKey()] || 0}</strong><small>reps today</small></div>
         <div><strong>${abilityStats().level}</strong><small>current lane</small></div>
-        <div><strong>${Math.round(abilityStats().mastery * 100)}%</strong><small>mastery</small></div>
+        <div><strong>${Math.round(abilityStats().progress * 100)}%</strong><small>progress</small></div>
       </div>
       <button class="primary-button" type="button" data-action="start">Start another</button>
     </div>
