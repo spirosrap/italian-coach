@@ -9,6 +9,7 @@ Italian Coach is a local-first adaptive practice app for learning Italian alongs
 - Builds short Italian practice sessions from a local course bank.
 - Adapts difficulty from `Energy`, `Minutes`, and `Focus` controls.
 - Mixes weak items, due review, new material, and occasional stretch phrases.
+- Tracks wrong answers and gives them a dedicated mistake-review loop.
 - Supports typed recall, multiple choice, grammar fill-ins, and browser speech playback for listening reps.
 - Saves progress privately in browser `localStorage`.
 - Optionally syncs progress through a small self-hosted server.
@@ -19,11 +20,23 @@ Italian Coach is a local-first adaptive practice app for learning Italian alongs
 Each item keeps a small local progress record:
 
 - attempts and correct answers
+- missed answers and the most recent wrong input
 - strength score from `0` to `1`
 - next due time
 - last self-grade: `Again`, `Hard`, `Good`, or `Easy`
 
-The next session favors low-strength and due items, then adds fresh material based on energy. Lower-energy sessions use gentler recognition work; higher-energy sessions add harder recall and a little more new content.
+The next session favors unresolved mistakes, low-strength items, and due items, then adds fresh material based on energy. Lower-energy sessions use gentler recognition work; higher-energy sessions add harder recall and a little more new content.
+
+## Mistake Review
+
+Wrong answers are saved in a small mistake list with:
+
+- the prompt
+- the answer you gave
+- the correct answer
+- how many times the item was missed
+
+Use `Practice mistakes` to start a focused review session. A mistake is cleared after you answer it correctly and grade it `Good` or `Easy`.
 
 ## Run on macOS
 
@@ -70,7 +83,7 @@ Each app instance keeps its own local copy. When a sync server URL is configured
 - a practice answer is graded
 - the Sync button is pressed
 
-Sync is merge-based. The server keeps the highest per-item attempts, correct counts, strength, and due values, plus the freshest settings/history. This lets the Mac and Android app reconcile after either one was closed.
+Sync is merge-based. The server keeps the highest per-item attempts, correct counts, missed counts, strength, due values, unresolved mistakes, and the freshest settings/history. This lets the Mac and Android app reconcile after either one was closed.
 
 ## Android
 

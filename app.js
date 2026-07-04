@@ -131,6 +131,9 @@ const el = {
   practicePanel: document.querySelector("#practicePanel"),
   weakSkills: document.querySelector("#weakSkills"),
   nextMix: document.querySelector("#nextMix"),
+  mistakeCount: document.querySelector("#mistakeCount"),
+  mistakeList: document.querySelector("#mistakeList"),
+  mistakeReviewButton: document.querySelector("#mistakeReviewButton"),
   recentAnswers: document.querySelector("#recentAnswers"),
   syncStatus: document.querySelector("#syncStatus"),
   syncDetail: document.querySelector("#syncDetail"),
@@ -143,6 +146,7 @@ function defaultState() {
   return {
     settings: { energy: 65, minutes: 10, focus: "balanced" },
     progress: {},
+    mistakes: {},
     history: [],
     daily: {},
     session: null,
@@ -168,6 +172,7 @@ function loadState() {
       ...base,
       ...parsed,
       settings: { ...base.settings, ...(parsed.settings || {}) },
+      mistakes: { ...base.mistakes, ...(parsed.mistakes || {}) },
       sync: { ...base.sync, ...(parsed.sync || {}) },
       meta: { ...base.meta, ...(parsed.meta || {}) }
     };
@@ -230,12 +235,58 @@ function progressFor(id) {
     state.progress[id] = {
       attempts: 0,
       correct: 0,
+      misses: 0,
       strength: 0,
       due: 0,
-      lastGrade: null
+      lastGrade: null,
+      lastWrongAt: 0
     };
   }
   return state.progress[id];
+}
+
+function itemFor(id) {
+  return ALL_ITEMS.find((item) => item.id === id) || null;
+}
+
+function isMistakeActive(row) {
+  return row && row.id && Number(row.at) > Number(row.resolvedAt || 0);
+}
+
+function mistakeRows() {
+  return Object.values(state.mistakes || {})
+    .filter((row) => isMistakeActive(row) && itemFor(row.id))
+    .sort((a, b) => Number(b.count || 0) - Number(a.count || 0) || Number(b.at || 0) - Number(a.at || 0));
+}
+
+function recordMistake(item) {
+  const previous = state.mistakes[item.id] || {};
+  const now = Date.now();
+  const input = checkedResult.input.trim() || "(blank)";
+  state.mistakes[item.id] = {
+    id: item.id,
+    skill: item.skill,
+    prompt: activeExercise.prompt,
+    input,
+    expected: checkedResult.answer,
+    explanation: checkedResult.explanation || activeExercise.detail || "",
+    count: (Number(previous.count) || 0) + 1,
+    at: now,
+    resolvedAt: 0
+  };
+
+  const progress = progressFor(item.id);
+  progress.misses = (Number(progress.misses) || 0) + 1;
+  progress.lastWrongAt = now;
+}
+
+function resolveMistake(item) {
+  const row = state.mistakes[item.id];
+  if (!row || !isMistakeActive(row)) return;
+  state.mistakes[item.id] = {
+    ...row,
+    resolvedAt: Date.now()
+  };
 }
 
 function getClientId() {
@@ -267,6 +318,7 @@ function exportSyncState(source = state) {
   return {
     settings: { ...(source.settings || {}) },
     progress: { ...(source.progress || {}) },
+    mistakes: { ...(source.mistakes || {}) },
     history: [...(source.history || [])].slice(0, 20),
     daily: { ...(source.daily || {}) },
     meta: { ...(source.meta || {}), clientId: getClientId() }
@@ -277,9 +329,24 @@ function mergeProgressRow(left = {}, right = {}) {
   return {
     attempts: Math.max(Number(left.attempts) || 0, Number(right.attempts) || 0),
     correct: Math.max(Number(left.correct) || 0, Number(right.correct) || 0),
+    misses: Math.max(Number(left.misses) || 0, Number(right.misses) || 0),
     strength: Math.max(Number(left.strength) || 0, Number(right.strength) || 0),
     due: Math.max(Number(left.due) || 0, Number(right.due) || 0),
+    lastWrongAt: Math.max(Number(left.lastWrongAt) || 0, Number(right.lastWrongAt) || 0),
     lastGrade: Number(right.due) >= Number(left.due) ? right.lastGrade || left.lastGrade || null : left.lastGrade || right.lastGrade || null
+  };
+}
+
+function mergeMistakeRow(left = {}, right = {}) {
+  const leftWrongAt = Number(left.at) || 0;
+  const rightWrongAt = Number(right.at) || 0;
+  const latestWrong = rightWrongAt >= leftWrongAt ? right : left;
+  return {
+    ...latestWrong,
+    id: latestWrong.id || left.id || right.id,
+    count: Math.max(Number(left.count) || 0, Number(right.count) || 0),
+    at: Math.max(leftWrongAt, rightWrongAt),
+    resolvedAt: Math.max(Number(left.resolvedAt) || 0, Number(right.resolvedAt) || 0)
   };
 }
 
@@ -291,6 +358,7 @@ function mergeSyncStates(local = {}, remote = {}) {
       ? { ...(local.settings || {}), ...(remote.settings || {}) }
       : { ...(remote.settings || {}), ...(local.settings || {}) },
     progress: {},
+    mistakes: {},
     history: [],
     daily: { ...(local.daily || {}) },
     meta: {
@@ -307,6 +375,10 @@ function mergeSyncStates(local = {}, remote = {}) {
 
   new Set([...Object.keys(local.progress || {}), ...Object.keys(remote.progress || {})]).forEach((id) => {
     merged.progress[id] = mergeProgressRow(local.progress?.[id], remote.progress?.[id]);
+  });
+
+  new Set([...Object.keys(local.mistakes || {}), ...Object.keys(remote.mistakes || {})]).forEach((id) => {
+    merged.mistakes[id] = mergeMistakeRow(local.mistakes?.[id], remote.mistakes?.[id]);
   });
 
   const seen = new Set();
@@ -326,6 +398,7 @@ function mergeSyncStates(local = {}, remote = {}) {
 function applySyncState(nextState) {
   state.settings = { ...state.settings, ...(nextState.settings || {}) };
   state.progress = { ...(nextState.progress || {}) };
+  state.mistakes = { ...(nextState.mistakes || {}) };
   state.daily = { ...(nextState.daily || {}) };
   state.history = [...(nextState.history || [])].slice(0, 20);
   state.meta = { ...(state.meta || {}), ...(nextState.meta || {}), clientId: getClientId() };
@@ -460,6 +533,10 @@ function pickSessionItems() {
   const target = sessionTarget();
   const energy = Number(state.settings.energy);
   const items = eligibleItems();
+  const mistakeItems = mistakeRows()
+    .map((row) => itemFor(row.id))
+    .filter(Boolean)
+    .slice(0, Math.ceil(target * 0.4));
   const due = items
     .filter((item) => progressFor(item.id).due <= now && progressFor(item.id).attempts > 0)
     .sort((a, b) => progressFor(a.id).strength - progressFor(b.id).strength);
@@ -473,10 +550,17 @@ function pickSessionItems() {
     ? shuffle(ALL_ITEMS.filter((item) => item.level <= abilityStats().levelGate + 2 && item.level > abilityStats().levelGate)).slice(0, 2)
     : [];
   const merged = [];
-  [...due, ...weak, ...fresh, ...stretch, ...shuffle(items)].forEach((item) => {
+  [...mistakeItems, ...due, ...weak, ...fresh, ...stretch, ...shuffle(items)].forEach((item) => {
     if (!merged.some((existing) => existing.id === item.id)) merged.push(item);
   });
   return merged.slice(0, target).map((item) => item.id);
+}
+
+function pickMistakeItems() {
+  return mistakeRows()
+    .map((row) => row.id)
+    .filter((id, index, ids) => ids.indexOf(id) === index)
+    .slice(0, clamp(sessionTarget(), 4, 16));
 }
 
 function makeExercise(item) {
@@ -582,11 +666,18 @@ function applyGrade(grade) {
   progress.due = Date.now() + Math.round(delta.delay * (0.55 + progress.strength));
   progress.lastGrade = grade;
 
+  if (checkedResult.correct && (grade === "good" || grade === "easy")) {
+    resolveMistake(item);
+  } else if (!checkedResult.correct) {
+    recordMistake(item);
+  }
+
   const day = todayKey();
   state.daily[day] = (state.daily[day] || 0) + 1;
   state.history.unshift({
     id: item.id,
     prompt: activeExercise.prompt,
+    input: checkedResult.input,
     answer: checkedResult.answer,
     correct: checkedResult.correct,
     at: Date.now()
@@ -611,6 +702,32 @@ function startSession() {
   const queue = pickSessionItems();
   state.session = {
     queue,
+    mode: "normal",
+    index: 0,
+    correct: 0,
+    startedAt: Date.now(),
+    finishedAt: null
+  };
+  activeExercise = null;
+  checkedResult = null;
+  saveState();
+  render();
+}
+
+function startMistakeSession() {
+  const queue = pickMistakeItems();
+  if (!queue.length) {
+    state.session = null;
+    activeExercise = null;
+    checkedResult = null;
+    saveState();
+    render();
+    return;
+  }
+
+  state.session = {
+    queue,
+    mode: "mistakes",
     index: 0,
     correct: 0,
     startedAt: Date.now(),
@@ -633,7 +750,7 @@ function endSession() {
 function currentItem() {
   if (!state.session || state.session.finishedAt) return null;
   const id = state.session.queue[state.session.index];
-  return ALL_ITEMS.find((item) => item.id === id) || null;
+  return itemFor(id);
 }
 
 function speakItalian(text) {
@@ -686,6 +803,7 @@ function renderStats() {
   el.todayCount.textContent = state.daily[todayKey()] || 0;
   el.masteryScore.textContent = `${Math.round(stats.mastery * 100)}%`;
   el.abilityLane.textContent = stats.level;
+  if (el.mistakeCount) el.mistakeCount.textContent = mistakeRows().length;
 }
 
 function renderInsights() {
@@ -714,16 +832,31 @@ function renderInsights() {
   const mix = pickSessionItems().slice(0, 5).map((id) => ALL_ITEMS.find((item) => item.id === id));
   el.nextMix.innerHTML = mix.map((item) => `
     <div class="mix-row">
-      <strong>${item.skill}</strong>
-      <small>${item.type === "phrase" ? item.en : item.prompt}</small>
+      <strong>${escapeHtml(item.skill)}</strong>
+      <small>${escapeHtml(item.type === "phrase" ? item.en : item.prompt)}</small>
     </div>
   `).join("");
+
+  const mistakes = mistakeRows();
+  if (el.mistakeList && el.mistakeReviewButton) {
+    el.mistakeList.innerHTML = mistakes.length
+      ? mistakes.slice(0, 5).map((row) => `
+        <div class="mistake-row">
+          <strong>${escapeHtml(row.expected || "")}</strong>
+          <small>${escapeHtml(row.prompt || itemFor(row.id)?.en || "")}</small>
+          <span>You answered: ${escapeHtml(row.input || "(blank)")}</span>
+        </div>
+      `).join("")
+      : `<div class="mistake-row empty"><strong>All clear</strong><small>No unresolved mistakes.</small></div>`;
+    el.mistakeReviewButton.disabled = mistakes.length === 0;
+    el.mistakeReviewButton.textContent = mistakes.length ? "Practice mistakes" : "No mistakes";
+  }
 
   el.recentAnswers.innerHTML = state.history.length
     ? state.history.slice(0, 5).map((row) => `
       <div class="recent-row">
-        <strong>${row.correct ? "Correct" : "Review"} · ${row.answer}</strong>
-        <small>${row.prompt}</small>
+        <strong>${row.correct ? "Correct" : "Review"} · ${escapeHtml(row.answer)}</strong>
+        <small>${escapeHtml(row.correct ? row.prompt : `${row.input || "(blank)"} · ${row.prompt}`)}</small>
       </div>
     `).join("")
     : `<div class="recent-row"><strong>No reps yet</strong><small>Start a session and this fills itself in.</small></div>`;
@@ -739,6 +872,7 @@ function renderSyncPanel() {
 function renderWelcome() {
   const stats = abilityStats();
   const target = sessionTarget();
+  const mistakes = mistakeRows();
   el.sessionLabel.textContent = "Ready";
   el.screenTitle.textContent = "Practice that follows your energy";
   el.startButton.textContent = "Start";
@@ -750,7 +884,10 @@ function renderWelcome() {
         <h3>${target} reps · ${state.settings.focus} mix</h3>
         <p>${energyCopy()} Your current lane is ${stats.level}, so the next set will favor level ${stats.levelGate} material with a few carefully chosen stretches.</p>
         <div class="meter" aria-label="Overall mastery"><span style="--value: ${Math.round(stats.mastery * 100)}%"></span></div>
-        <button class="primary-button" type="button" data-action="start">Start session</button>
+        <div class="button-row">
+          <button class="primary-button" type="button" data-action="start">Start session</button>
+          <button class="secondary-button" type="button" data-action="mistakes" ${mistakes.length ? "" : "disabled"}>Mistakes</button>
+        </div>
       </div>
       <div class="focus-card">
         <p class="eyebrow">Phrase to keep warm</p>
@@ -769,7 +906,7 @@ function renderExercise() {
   const progress = Math.round((session.index / total) * 100);
   const isListen = activeExercise.mode === "listen";
   el.sessionLabel.textContent = `${number} of ${total}`;
-  el.screenTitle.textContent = activeExercise.tag;
+  el.screenTitle.textContent = session.mode === "mistakes" ? "Mistake review" : activeExercise.tag;
   el.startButton.textContent = "Restart";
   el.resetSessionButton.style.visibility = "visible";
 
@@ -815,9 +952,16 @@ function renderExercise() {
 function renderFeedback() {
   const className = checkedResult.correct ? "feedback good" : "feedback miss";
   const lead = checkedResult.correct ? "Yes." : `Answer: ${checkedResult.answer}`;
+  const mistakeMarkup = checkedResult.correct ? "" : `
+    <div class="correction-card">
+      <span>You answered</span>
+      <strong>${escapeHtml(checkedResult.input.trim() || "(blank)")}</strong>
+    </div>
+  `;
   return `
     <div class="${className}">
-      <p><strong>${lead}</strong> ${checkedResult.explanation || ""}</p>
+      <p><strong>${escapeHtml(lead)}</strong> ${escapeHtml(checkedResult.explanation || "")}</p>
+      ${mistakeMarkup}
       <div class="grade-row">
         <button class="grade-button" type="button" data-grade="again">Again</button>
         <button class="grade-button" type="button" data-grade="hard">Hard</button>
@@ -833,7 +977,7 @@ function renderComplete() {
   const correct = state.session.correct;
   const minutes = Math.max(1, Math.round((state.session.finishedAt - state.session.startedAt) / 60000));
   el.sessionLabel.textContent = "Done";
-  el.screenTitle.textContent = "Session complete";
+  el.screenTitle.textContent = state.session.mode === "mistakes" ? "Mistakes reviewed" : "Session complete";
   el.startButton.textContent = "Again";
   el.resetSessionButton.style.visibility = "visible";
   el.practicePanel.innerHTML = `
@@ -866,6 +1010,15 @@ function escapeAttr(value) {
   return String(value).replace(/"/g, "&quot;");
 }
 
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 el.energy.addEventListener("input", (event) => {
   state.settings.energy = Number(event.target.value);
   saveState({ sync: true });
@@ -886,6 +1039,7 @@ el.focus.addEventListener("change", (event) => {
 
 el.startButton.addEventListener("click", startSession);
 el.resetSessionButton.addEventListener("click", endSession);
+el.mistakeReviewButton.addEventListener("click", startMistakeSession);
 el.syncNowButton.addEventListener("click", () => syncProgress("both"));
 el.syncPullButton.addEventListener("click", () => syncProgress("pull"));
 el.syncServer.addEventListener("change", (event) => {
@@ -901,6 +1055,7 @@ el.practicePanel.addEventListener("click", (event) => {
   const grade = event.target.closest("[data-grade]")?.dataset.grade;
 
   if (action === "start") startSession();
+  if (action === "mistakes") startMistakeSession();
   if (action === "hear-daily") speakItalian(dailyPhrase().it);
   if (action === "hear-current" && activeExercise) speakItalian(activeExercise.item.it);
   if (choice && !checkedResult) {

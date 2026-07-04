@@ -82,9 +82,24 @@ function mergeProgressRow(left = {}, right = {}) {
   return {
     attempts: Math.max(Number(left.attempts) || 0, Number(right.attempts) || 0),
     correct: Math.max(Number(left.correct) || 0, Number(right.correct) || 0),
+    misses: Math.max(Number(left.misses) || 0, Number(right.misses) || 0),
     strength: Math.max(Number(left.strength) || 0, Number(right.strength) || 0),
     due: Math.max(Number(left.due) || 0, Number(right.due) || 0),
+    lastWrongAt: Math.max(Number(left.lastWrongAt) || 0, Number(right.lastWrongAt) || 0),
     lastGrade: Number(right.due) >= Number(left.due) ? right.lastGrade || left.lastGrade || null : left.lastGrade || right.lastGrade || null
+  };
+}
+
+function mergeMistakeRow(left = {}, right = {}) {
+  const leftWrongAt = Number(left.at) || 0;
+  const rightWrongAt = Number(right.at) || 0;
+  const latestWrong = rightWrongAt >= leftWrongAt ? right : left;
+  return {
+    ...latestWrong,
+    id: latestWrong.id || left.id || right.id,
+    count: Math.max(Number(left.count) || 0, Number(right.count) || 0),
+    at: Math.max(leftWrongAt, rightWrongAt),
+    resolvedAt: Math.max(Number(left.resolvedAt) || 0, Number(right.resolvedAt) || 0)
   };
 }
 
@@ -94,6 +109,7 @@ function mergeStates(base = {}, incoming = {}) {
       ? { ...(base.settings || {}), ...(incoming.settings || {}) }
       : { ...(incoming.settings || {}), ...(base.settings || {}) },
     progress: {},
+    mistakes: {},
     history: [],
     daily: { ...(base.daily || {}) },
     meta: {
@@ -109,6 +125,10 @@ function mergeStates(base = {}, incoming = {}) {
 
   new Set([...Object.keys(base.progress || {}), ...Object.keys(incoming.progress || {})]).forEach((id) => {
     merged.progress[id] = mergeProgressRow(base.progress?.[id], incoming.progress?.[id]);
+  });
+
+  new Set([...Object.keys(base.mistakes || {}), ...Object.keys(incoming.mistakes || {})]).forEach((id) => {
+    merged.mistakes[id] = mergeMistakeRow(base.mistakes?.[id], incoming.mistakes?.[id]);
   });
 
   const seen = new Set();
