@@ -168,12 +168,18 @@ function loadState() {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
     const base = defaultState();
     if (!parsed) return base;
+    const sync = { ...base.sync, ...(parsed.sync || {}) };
+    if (shouldUseDefaultSyncServer(sync.serverUrl, base.sync.serverUrl)) {
+      sync.serverUrl = base.sync.serverUrl;
+      sync.status = "Ready to sync";
+      sync.detail = base.sync.serverUrl;
+    }
     return {
       ...base,
       ...parsed,
       settings: { ...base.settings, ...(parsed.settings || {}) },
       mistakes: { ...base.mistakes, ...(parsed.mistakes || {}) },
-      sync: { ...base.sync, ...(parsed.sync || {}) },
+      sync,
       meta: { ...base.meta, ...(parsed.meta || {}) }
     };
   } catch {
@@ -209,6 +215,10 @@ function normalize(value) {
     .trim();
 }
 
+function plainText(value) {
+  return normalize(value).replace(/\s+/g, "");
+}
+
 function levenshtein(a, b) {
   const matrix = Array.from({ length: b.length + 1 }, (_, row) => [row]);
   for (let col = 0; col <= a.length; col += 1) matrix[0][col] = col;
@@ -228,6 +238,31 @@ function similarity(a, b) {
   if (!left || !right) return 0;
   const distance = levenshtein(left, right);
   return 1 - distance / Math.max(left.length, right.length);
+}
+
+function compareTypedAnswer(input, candidate) {
+  const cleanInput = normalize(input);
+  const cleanCandidate = normalize(candidate);
+  const compactInput = plainText(input);
+  const compactCandidate = plainText(candidate);
+  const inputToCheck = compactInput.length >= 7 ? compactInput : cleanInput;
+  const candidateToCheck = compactCandidate.length >= 7 ? compactCandidate : cleanCandidate;
+  const distance = levenshtein(inputToCheck, candidateToCheck);
+  const score = inputToCheck && candidateToCheck
+    ? 1 - distance / Math.max(inputToCheck.length, candidateToCheck.length)
+    : 0;
+  const length = candidateToCheck.length;
+  const minorDistance = length >= 12 ? 3 : length >= 7 ? 2 : 1;
+  const minorScore = length >= 12 ? 0.78 : length >= 7 ? 0.82 : 0.86;
+  const exact = cleanInput === cleanCandidate || compactInput === compactCandidate;
+  const minor = !exact && length >= 4 && distance <= minorDistance && score >= minorScore;
+  return { candidate, distance, exact, minor, score };
+}
+
+function bestTypedMatch(input, accepted) {
+  return accepted
+    .map((candidate) => compareTypedAnswer(input, candidate))
+    .sort((a, b) => Number(b.exact) - Number(a.exact) || Number(b.minor) - Number(a.minor) || b.score - a.score)[0];
 }
 
 function progressFor(id) {
@@ -312,6 +347,26 @@ function normalizeServerUrl(value) {
 function syncServerUrl() {
   state.sync.serverUrl = normalizeServerUrl(state.sync.serverUrl || defaultSyncServerUrl());
   return state.sync.serverUrl;
+}
+
+function shouldUseDefaultSyncServer(savedUrl, defaultUrl) {
+  if (!defaultUrl) return false;
+  const saved = normalizeServerUrl(savedUrl);
+  const fallback = normalizeServerUrl(defaultUrl);
+  if (!saved || saved === fallback) return !saved;
+  try {
+    const url = new URL(saved);
+    const host = url.hostname.toLowerCase();
+    const isPrivate = host === "localhost"
+      || host === "127.0.0.1"
+      || host.endsWith(".local")
+      || /^10\./.test(host)
+      || /^192\.168\./.test(host)
+      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host);
+    return isPrivate || url.port === "4179";
+  } catch {
+    return false;
+  }
 }
 
 function exportSyncState(source = state) {
@@ -628,19 +683,21 @@ function checkAnswer(input) {
   if (!activeExercise) return null;
   const raw = String(input || "");
   let correct = false;
+  let minor = false;
+  let closest = activeExercise.answer;
   if (activeExercise.mode === "choice") {
     correct = raw === activeExercise.answer;
   } else {
     const accepted = activeExercise.accepted || [activeExercise.answer];
-    correct = accepted.some((candidate) => {
-      const cleanInput = normalize(raw);
-      const cleanCandidate = normalize(candidate);
-      if (cleanInput === cleanCandidate) return true;
-      return cleanCandidate.length >= 7 && similarity(cleanInput, cleanCandidate) >= 0.87;
-    });
+    const match = bestTypedMatch(raw, accepted);
+    correct = Boolean(match?.exact || match?.minor);
+    minor = Boolean(match?.minor);
+    closest = match?.candidate || activeExercise.answer;
   }
   return {
     correct,
+    minor,
+    closest,
     input: raw,
     answer: activeExercise.answer,
     explanation: activeExercise.explanation
@@ -680,6 +737,7 @@ function applyGrade(grade) {
     input: checkedResult.input,
     answer: checkedResult.answer,
     correct: checkedResult.correct,
+    minor: checkedResult.minor,
     at: Date.now()
   });
   state.history = state.history.slice(0, 12);
@@ -840,13 +898,7 @@ function renderInsights() {
   const mistakes = mistakeRows();
   if (el.mistakeList && el.mistakeReviewButton) {
     el.mistakeList.innerHTML = mistakes.length
-      ? mistakes.slice(0, 5).map((row) => `
-        <div class="mistake-row">
-          <strong>${escapeHtml(row.expected || "")}</strong>
-          <small>${escapeHtml(row.prompt || itemFor(row.id)?.en || "")}</small>
-          <span>You answered: ${escapeHtml(row.input || "(blank)")}</span>
-        </div>
-      `).join("")
+      ? mistakes.slice(0, 7).map((row) => renderMistakeRow(row, true)).join("")
       : `<div class="mistake-row empty"><strong>All clear</strong><small>No unresolved mistakes.</small></div>`;
     el.mistakeReviewButton.disabled = mistakes.length === 0;
     el.mistakeReviewButton.textContent = mistakes.length ? "Practice mistakes" : "No mistakes";
@@ -855,7 +907,7 @@ function renderInsights() {
   el.recentAnswers.innerHTML = state.history.length
     ? state.history.slice(0, 5).map((row) => `
       <div class="recent-row">
-        <strong>${row.correct ? "Correct" : "Review"} · ${escapeHtml(row.answer)}</strong>
+        <strong>${row.correct ? row.minor ? "Close" : "Correct" : "Review"} · ${escapeHtml(row.answer)}</strong>
         <small>${escapeHtml(row.correct ? row.prompt : `${row.input || "(blank)"} · ${row.prompt}`)}</small>
       </div>
     `).join("")
@@ -894,6 +946,22 @@ function renderWelcome() {
         <h3>${dailyPhrase().it}</h3>
         <p>${dailyPhrase().en}</p>
         <button class="secondary-button" type="button" data-action="hear-daily">Hear it</button>
+      </div>
+      <div class="mistake-notebook-card ${mistakes.length ? "" : "is-clear"}">
+        <div class="section-heading">
+          <p class="eyebrow">Mistake notebook</p>
+          <strong>${mistakes.length}</strong>
+        </div>
+        ${mistakes.length ? `
+          <div class="mistake-notebook-list">
+            ${mistakes.slice(0, 8).map((row) => renderMistakeRow(row)).join("")}
+          </div>
+          <div class="button-row">
+            <button class="primary-button" type="button" data-action="mistakes">Practice mistakes</button>
+          </div>
+        ` : `
+          <p>No unresolved mistakes right now. New wrong answers will appear here with your answer next to the correction.</p>
+        `}
       </div>
     </div>
   `;
@@ -950,9 +1018,20 @@ function renderExercise() {
 }
 
 function renderFeedback() {
-  const className = checkedResult.correct ? "feedback good" : "feedback miss";
-  const lead = checkedResult.correct ? "Yes." : `Answer: ${checkedResult.answer}`;
-  const mistakeMarkup = checkedResult.correct ? "" : `
+  const className = checkedResult.correct ? checkedResult.minor ? "feedback almost" : "feedback good" : "feedback miss";
+  const lead = checkedResult.correct ? checkedResult.minor ? "Close enough." : "Yes." : `Answer: ${checkedResult.answer}`;
+  const correctionMarkup = checkedResult.minor ? `
+    <div class="correction-card minor">
+      <div>
+        <span>You typed</span>
+        <strong>${escapeHtml(checkedResult.input.trim() || "(blank)")}</strong>
+      </div>
+      <div>
+        <span>Best form</span>
+        <strong>${escapeHtml(checkedResult.closest || checkedResult.answer)}</strong>
+      </div>
+    </div>
+  ` : checkedResult.correct ? "" : `
     <div class="correction-card">
       <span>You answered</span>
       <strong>${escapeHtml(checkedResult.input.trim() || "(blank)")}</strong>
@@ -961,13 +1040,26 @@ function renderFeedback() {
   return `
     <div class="${className}">
       <p><strong>${escapeHtml(lead)}</strong> ${escapeHtml(checkedResult.explanation || "")}</p>
-      ${mistakeMarkup}
+      ${correctionMarkup}
       <div class="grade-row">
         <button class="grade-button" type="button" data-grade="again">Again</button>
         <button class="grade-button" type="button" data-grade="hard">Hard</button>
         <button class="grade-button" type="button" data-grade="good">Good</button>
         <button class="grade-button" type="button" data-grade="easy">Easy</button>
       </div>
+    </div>
+  `;
+}
+
+function renderMistakeRow(row, compact = false) {
+  const prompt = row.prompt || itemFor(row.id)?.en || "";
+  const count = Number(row.count) || 1;
+  return `
+    <div class="mistake-row ${compact ? "compact" : ""}">
+      <small>${escapeHtml(row.skill || itemFor(row.id)?.skill || "Review")} · missed ${count} ${count === 1 ? "time" : "times"}</small>
+      <strong>${escapeHtml(row.expected || "")}</strong>
+      <span>Yours: ${escapeHtml(row.input || "(blank)")}</span>
+      ${compact ? "" : `<em>${escapeHtml(prompt)}</em>`}
     </div>
   `;
 }

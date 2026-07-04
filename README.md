@@ -10,6 +10,8 @@ Italian Coach is a local-first adaptive practice app for learning Italian alongs
 - Adapts difficulty from `Energy`, `Minutes`, and `Focus` controls.
 - Mixes weak items, due review, new material, and occasional stretch phrases.
 - Tracks wrong answers and gives them a dedicated mistake-review loop.
+- Shows a mistake notebook with your answer, the correction, and miss count.
+- Accepts small typed near-misses as correct while still showing the cleaner form.
 - Supports typed recall, multiple choice, grammar fill-ins, and browser speech playback for listening reps.
 - Saves progress privately in browser `localStorage`.
 - Optionally syncs progress through a small self-hosted server.
@@ -37,6 +39,8 @@ Wrong answers are saved in a small mistake list with:
 - how many times the item was missed
 
 Use `Practice mistakes` to start a focused review session. A mistake is cleared after you answer it correctly and grade it `Good` or `Easy`.
+
+Small typos in typed phrase answers can be accepted as `Close enough`; the feedback still shows the best form so you can notice the difference without turning a near miss into a failed rep.
 
 ## Run on macOS
 

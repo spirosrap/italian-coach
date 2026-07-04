@@ -292,7 +292,8 @@ select:focus,
 }
 
 .session-card,
-.focus-card {
+.focus-card,
+.mistake-notebook-card {
   display: grid;
   align-content: start;
   gap: 16px;
@@ -308,6 +309,30 @@ select:focus,
   padding: 18px;
   border: 1px solid var(--line);
   background: #fff;
+}
+
+.mistake-notebook-card {
+  grid-column: 1 / -1;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--tomato);
+  background: #fff;
+}
+
+.mistake-notebook-card.is-clear {
+  border-left-color: var(--basil);
+  background: var(--soft-green);
+}
+
+.mistake-notebook-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.mistake-notebook-list {
+  display: grid;
+  gap: 10px;
 }
 
 .session-card h3 {
@@ -463,6 +488,10 @@ select:focus,
   background: var(--soft-green);
 }
 
+.feedback.almost {
+  background: #fff7e4;
+}
+
 .feedback.miss {
   background: var(--soft-red);
 }
@@ -479,6 +508,11 @@ select:focus,
   border-radius: 8px;
   background: #fff;
   padding: 10px;
+}
+
+.correction-card.minor {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-color: rgba(213, 155, 36, 0.34);
 }
 
 .correction-card span {
@@ -581,11 +615,26 @@ select:focus,
   border-left: 4px solid var(--tomato);
 }
 
+.mistake-row strong {
+  font-size: 0.96rem;
+}
+
 .mistake-row span {
   color: #8e2d1c;
   font-size: 0.84rem;
   font-weight: 750;
   line-height: 1.35;
+}
+
+.mistake-row em {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.mistake-row.compact {
+  min-height: 0;
 }
 
 .mistake-row.empty {
@@ -689,7 +738,8 @@ select:focus,
 
   .choice-grid,
   .grade-row,
-  .complete-stats {
+  .complete-stats,
+  .correction-card.minor {
     grid-template-columns: 1fr;
   }
 
